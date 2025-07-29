@@ -1,7 +1,7 @@
 module.exports = {
     name: '!botzap',
     description: 'Exibe a mensagem de ajuda principal.',
-    async execute(message, command, body) {
+    async execute(sock, m, command, body) {
         const botZapMessage =
             `*Como começar um jogo?*\n` +
             `Digite \`!jogo <nome do jogo>\`\n\n` +

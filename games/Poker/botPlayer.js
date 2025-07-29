@@ -6,10 +6,6 @@ const evaluator = require('poker-evaluator');
 const BOT_ID = 'bot@cpu.bot';
 const BOT_NAME = 'BOT Dealer';
 
-// Funções de análise (getPreFlopHandCategory, getPostFlopHandStrength, definirPerfilFinanceiro)
-// ... cole aqui as 3 funções de análise que já tínhamos e funcionavam ...
-// Vou colocar elas aqui novamente para garantir que tenhamos a versão completa.
-
 function getPreFlopHandCategory(hand) {
     const ranks = '23456789TJQKA', r1 = hand[0][0], r2 = hand[1][0];
     const isSuited = hand[0][1] === hand[1][1], isPair = r1 === r2;
@@ -101,7 +97,12 @@ function decideAction(session) {
         if (handInfo.strength === 'MUITO_FORTE') {
             command = isFacingBet ? '!aumentar' : '!apostar';
         } else if (handInfo.strength === 'FORTE') {
-            command = isFacingBet ? '!pagar' : '!apostar';
+            if (isFacingBet) {
+                command = '!pagar';
+                amount = amountToCall; // ADICIONE ESTA LINHA
+            } else {
+                command = '!apostar';
+            }
         } else if (handInfo.strength === 'MEDIA') {
             command = isFacingBet ? '!correr' : '!mesa';
             // Lógica de blefe simples
