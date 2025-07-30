@@ -56,78 +56,49 @@ async function connectToWhatsApp() {
         const chatId = msg.key.remoteJid;
         const senderId = msg.key.participant || msg.key.remoteJid;
         const messageText = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+        const lowerCaseText = messageText.toLowerCase();
 
-        // --- NOVA LÓGICA DE ROTEAMENTO DE JOGO ---
-        // Primeiro, verifica se há uma sessão ativa neste chat
-        const session = sessionManager.getSession(chatId);
-        if (session) {
-            try {
-                logger.log(sock, msg, `Sessão ativa de '${session.game}'. Roteando para o jogo...`);
-                
-                // Se a sessão está no lobby, manda para o handler do lobby
-                if (session.status === 'lobby') {
-                    await lobby.handleLobbyCommand(msg, session, sock);
-                    return; // Encerra o processamento aqui, pois a mensagem foi tratada
-                }
-
-                // Se a sessão está em jogo, manda para o handler do jogo específico
-                if (session.status === 'em_jogo') {
-                    const gameActions = { 
-                        poker: pokerActions, 
-                        truco: trucoActions, 
-                        forca: forcaActions, 
-                        velha: velhaActions, 
-                        uno: unoActions, 
-                        xadrez: xadrezActions 
-                    };
-
-                    if (gameActions[session.game]) {
-                        await gameActions[session.game].handleGameCommand(msg, session, sock);
-                        return; // Encerra o processamento aqui
-                    }
-                }
-            } catch (error) {
-                logger.log(sock, msg, 'ERRO DURANTE SESSÃO DE JOGO:', error);
-                await sock.sendMessage(chatId, { text: '❌ Ocorreu um erro durante o jogo.' }, { quoted: msg });
-            }
-            return; // Garante que, se houver sessão, não tente processar como um comando normal
-        }
-        // --- FIM DA NOVA LÓGICA DE JOGO ---
-
-
-        // Se não há sessão de jogo, continua para o tratamento de comandos normais
-        if (!messageText || !messageText.startsWith('!')) {
-            return;
+        // --- LÓGICA DE SESSÃO ATIVA (JOGOS E CONVERSAS) ---
+        const activeSession = sessionManager.getSession(chatId);
+        if (activeSession && activeSession.creatorId === senderId) {
+            await handleCommand(sock, m, null, activeSession); // Trata a mensagem como parte de uma sessão
+            return; 
         }
 
-        // Filtro de usuários (lógica que já existia)
-        const allowedUserIds = (process.env.ALLOWED_USER_IDS || '').split(',').map(id => id.trim());
+        // --- SE NÃO HÁ SESSÃO, CONTINUA ---
+        const fullAccessUsers = (process.env.FULL_ACCESS_USERS || '').split(',').map(id => id.trim());
+        const betaTesters = (process.env.FUEL_BETA_TESTERS || '').split(',').map(id => id.trim());
         const normalizedSenderId = senderId.split('@')[0];
 
-        if (allowedUserIds.length > 0 && !allowedUserIds.includes(normalizedSenderId)) {
-            logger.log(sock, msg, `Usuário não autorizado (${normalizedSenderId}) tentou usar o comando: ${messageText}`);
+        let userAccessLevel = 'none';
+        if (fullAccessUsers.includes(normalizedSenderId)) {
+            userAccessLevel = 'full';
+        } else if (betaTesters.includes(normalizedSenderId)) {
+            userAccessLevel = 'beta';
+        }
+
+        if (userAccessLevel === 'none') return; // Bloqueia usuários não listados
+
+        // --- ROTEAMENTO DE COMANDOS E GATILHOS ---
+        
+        // Gatilhos de palavra-chave para iniciar a conversa de combustível
+        const fuelTriggerPrefixes = ['abas', 'gaso', 'et', 'alc'];
+        const isFuelTrigger = fuelTriggerPrefixes.some(prefix => lowerCaseText.startsWith(prefix));
+        
+        if (isFuelTrigger && !messageText.startsWith('!')) {
+            await handleCommand(sock, m, userAccessLevel, null);
             return;
         }
-
-        // Filtro de grupos (lógica que já existia)
-        const groupFilterEnabled = process.env.ENABLE_GROUP_FILTER === 'true';
-        const isGroup = chatId.endsWith('@g.us');
-
-        if (groupFilterEnabled && isGroup) {
-            const allowedGroupIds = process.env.ALLOWED_GROUP_IDS ? process.env.ALLOWED_GROUP_IDS.split(',') : [];
-            if (!allowedGroupIds.includes(chatId)) {
-                logger.log(sock, msg, `Comando ignorado: O grupo (${chatId}) não está na lista de permissão.`);
-                return;
+        
+        // Comandos normais que começam com "!"
+        if (messageText.startsWith('!')) {
+            try {
+                logger.log(sock, msg, `Comando recebido: ${messageText}`);
+                await handleCommand(sock, m, userAccessLevel, null);
+            } catch (error) {
+                logger.log(sock, msg, 'ERRO FATAL AO PROCESSAR COMANDO:', error);
+                await sock.sendMessage(chatId, { text: '❌ Ocorreu um erro inesperado.' });
             }
-        }
-
-        // Se passou por tudo, executa o comando via commandHandler.js
-        try {
-            logger.log(sock, msg, `Comando recebido: ${messageText}`);
-            await handleCommand(sock, msg);
-        } catch (error) {
-            logger.log(sock, msg, 'ERRO FATAL AO PROCESSAR COMANDO:', error);
-            await sock.sendMessage(chatId, { text: '❌ Ocorreu um erro inesperado.' }, { quoted: msg });
         }
     });
 }
