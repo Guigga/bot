@@ -12,10 +12,16 @@
   "license": "ISC",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
+    "canvas": "^3.1.2",
+    "chartjs-node-canvas": "^5.0.0",
+    "chess.js": "^1.4.0",
     "dotenv": "^17.2.0",
+    "jimp": "^0.16.13",
     "json2csv": "^6.0.0-alpha.2",
     "mongoose": "^8.16.4",
     "nanoid": "^5.1.5",
+    "play-dl": "^1.9.7",
+    "poker-evaluator": "^2.1.0",
     "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
